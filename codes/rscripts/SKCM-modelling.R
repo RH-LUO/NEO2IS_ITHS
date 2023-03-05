@@ -174,14 +174,17 @@ dat.new[dat.new$B2M=="Mut",var] <- 0
 # dataCD <- dat.new
 dataCD.test <- dataCD
 ######
-covariate <- c("CD86","CD28","IL2","IL12","IFNG","TNFR","TAM.effector",
-               "Purity","Sex","Age",'HLA_B2M.mut',
-               "CD4.effector")
-var <- c("Score.Fusion.neo","Score.SNV.neo","Score.INDEL.neo")
+covariate <- c("CD80","TAM.effector","Str",
+               'TAN',"CD4.effector",#'Th1'-->IL2-->CD8NaiveToCTL,'Th2'-->IL4-->BNaiveToBActivated
+               'Tregs',
+               "Purity",
+               "Sex","Age",'HLA_B2M.mut'
+)
+var <- c("Score.Fusion.neo","Score.SNV.neo","Score.INDEL.neo"
+)
 covariates <- c(var,covariate)
 covariates
-length(covariates)
-# alternative for cross validation
+length(covariates)#13
 equation <- as.formula(paste0('CD8Tex~',paste0(covariates,collapse = "+")))
 print(equation)
 set.seed(321)
@@ -195,13 +198,60 @@ set.seed(123)
 myControl <- trainControl(method = "cv",
                           number = 10,
                           verboseIter = T)
+model_lin <- train(
+  equation,
+  fold_train,
+  method = "lm",
+  trControl = myControl)
+model_svr <- train(
+  equation,
+  fold_train,
+  method = "svmRadial",#"svmPoly"
+  trControl = myControl)
+model_gbm <- train(
+  fold_train[,covariates], fold_train[,"CD8Tex"], 
+  method = "gbm",#ntrees=ntrees,
+  trControl = myControl)
+summary(model_lin)
+pred_lin <- predict(model_lin, fold_test[,covariates])
+pred_svr <- predict(model_svr, fold_test[,covariates])
+pred_gbm <- predict(model_gbm, fold_test[,covariates])
+
+dim(fold_train)
+dim(fold_test)
+library(caret)
+set.seed(123)
+test <- train(
+  equation.less,
+  fold_train,
+  method = "lm",
+  trControl = myControl)
+pred_test <- predict(test, fold_test[,covariates])
+summary(test)
+#####---feature selection using stepwise---#######
+library(leaps)
+library(MASS)
+library(MASS, lib.loc = "/public/apps/R-4.1.0/library")
+step.model.1 <- stepAIC(lm(equation, data=fold_train), direction = "both", 
+                        trace = FALSE)
+summary(step.model.1)
+names(coef(step.model.1))
+covariates <- gsub('Sex1','Sex',names(coef(step.model.1))[-1])
+covariates <- gsub('HLA_B2M.mut1','HLA_B2M.mut',covariates)
+equation <- as.formula(paste0('CD8Tex~',paste0(covariates,collapse = "+")))
+print(equation)
+########alternaltive models------
+set.seed(123)
+myControl <- trainControl(method = "cv",
+                          number = 10,
+                          verboseIter = T)
 model_lin3 <- train(
   equation,
   fold_train,
   method = "lm",
   trControl = myControl)
 summary(model_lin3)
-########---alternaltive models---#########
+
 model_svr3 <- train(
   equation,
   fold_train,
@@ -222,13 +272,10 @@ pred_svr3 <- predict(model_svr3, fold_test[,covariates])
 pred_gbm3 <- predict(model_gbm3, fold_test[,covariates])
 
 library(forecast)
-accuracy(pred_lin3, fold_test$CD8Tex)#0.973562 0.798295
-accuracy(pred_gbm3, fold_test$CD8Tex)#0.9492962 0.7215463
-accuracy(pred_svr3, fold_test$CD8Tex)#0.9746982 0.7739628
 #########---ME  RMSE   MAE   MPE MAPE---#########
-cor.test(fold_test$CD8Tex,pred_lin3,method="spearman")#0.66
-cor.test(fold_test$CD8Tex,pred_gbm3,method="spearman")#0.66
-cor.test(fold_test$CD8Tex,pred_svr3,method="spearman")#0.61
+cor.test(fold_test$CD8Tex,pred_lin3,method="spearman")#0.6556 
+cor.test(fold_test$CD8Tex,pred_gbm3,method="spearman")#0.1505
+cor.test(fold_test$CD8Tex,pred_svr3,method="spearman")#0.5861 
 pdf("SKCM.fold_test_pred_lin3.pdf",width = 5,height = 5)
 ggplot(data=fold_test, aes(pred_lin3,CD8Tex))+geom_point(colour = 'black', size = 1.5)+stat_smooth(method="lm",se=FALSE)+
   stat_cor(data=as.data.frame(fold_test), method = "spearman",size=5,
@@ -311,11 +358,11 @@ p + #stat_compare_means(comparisons = compar,label.x = 1.5, label.y = c(10,6,8),
     axis.title.y  = element_text(color = 'black', size = 14, angle = 90),
     legend.title  = element_text(color = 'black', size  = 16),
     legend.text   = element_text(color = 'black', size   = 16),
-    axis.line.y = element_line(color = 'black', linetype = 'solid'), # y
-    axis.line.x = element_line (color = 'black',linetype = 'solid'), # x
+    axis.line.y = element_line(color = 'black', linetype = 'solid'), # y轴线特征
+    axis.line.x = element_line (color = 'black',linetype = 'solid'), # x轴线特征
   )
 dev.off()
-
+model <- lm(equation, data=fold_train)
 cor<-summary(model_lin3)
 coef <- round(coef(cor)[,1],4)
 tvalue<-round(cor$coefficients[,3],4)
@@ -351,14 +398,13 @@ coef <- logit_result.3$Coef
 Neoantigen.model <- data.matrix(sigExpressionProfile) %*% coef
 names(Neoantigen.model) <- dataCD.new$Samples
 Neoantigen.data_SKCM$Neoantigen.model <- as.numeric(Neoantigen.model)#data.matrix(sigExpressionProfile) %*% coef
+# Neoantigen.model is NEO2IS 
 table(is.na(Neoantigen.data_SKCM$Neoantigen.model))
 summary(Neoantigen.model)
 Neoantigen.data_SKCM$B2M <- dataCD$B2M[match(Neoantigen.data_SKCM$Samples,
                                              dataCD$Samples)]
 Neoantigen.data_SKCM$CD8Tex <- dataCD$CD8Tex[match(Neoantigen.data_SKCM$Samples,
                                                    dataCD$Samples)]
-Neoantigen.data_SKCM$Neoantigen.score <- dataCD$Neoantigen.score[match(Neoantigen.data_SKCM$Samples,
-                                                                       dataCD$Samples)]
 
 
 #########---NEOITH score calculation---##########

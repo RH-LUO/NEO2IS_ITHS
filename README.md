@@ -8,11 +8,13 @@
 <picture>
  <source media="(prefers-color-scheme: dark)" srcset="https://user-images.githubusercontent.com/126743171/222977694-865d2d3c-5396-4688-9f11-dd3600c39b2c.png">
  <source media="(prefers-color-scheme: light)" srcset="https://user-images.githubusercontent.com/126743171/222977694-865d2d3c-5396-4688-9f11-dd3600c39b2c.png">
- <img alt="YOUR-ALT-TEXT" src="YOUR-DEFAULT-IMAGE">
+ <img alt="Pipeline" src="YOUR-DEFAULT-IMAGE">
 </picture>
 
 # Citation
 ### Luo, R., Chyr, J., Wen, J.et al. A novel integrated approach to predicting cancer immunotherapy efficacy. Oncogene (2023). https://doi.org/10.1038/s41388-023-02670-1
+        
+        
         
         
         
